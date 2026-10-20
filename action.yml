@@ -1,0 +1,92 @@
+name: Obsidian Vault Backup
+description: Mirror an Obsidian Sync vault into the root of the current repository and commit the changes.
+author: vhermecz
+branding:
+  icon: archive
+  color: purple
+
+inputs:
+  vault:
+    description: Remote vault name or ID (as shown by `ob sync-list-remote`).
+    required: true
+  auth-token:
+    description: Obsidian auth token (contents of ~/.config/obsidian-headless/auth_token after `ob login`).
+    required: true
+  vault-password:
+    description: End-to-end encryption password. Leave empty for vaults using standard encryption.
+    required: false
+    default: ""
+  device-name:
+    description: Device name this client reports to Obsidian Sync.
+    required: false
+    default: github-actions
+  max-shrink-percent:
+    description: Abort if the vault would remove more than this percentage of the files currently in the repo. Set to 100 to disable.
+    required: false
+    default: "50"
+  commit-message:
+    description: 'Commit message. Defaults to "sync: YYYY-MM-DD" (UTC).'
+    required: false
+    default: ""
+  git-user-name:
+    description: Commit author name.
+    required: false
+    default: github-actions[bot]
+  git-user-email:
+    description: Commit author email.
+    required: false
+    default: 41898282+github-actions[bot]@users.noreply.github.com
+  verbose:
+    description: Print the per-file sync log. Off by default because it lists the vault's file names.
+    required: false
+    default: "false"
+  obsidian-headless-version:
+    description: Version of the obsidian-headless npm package to use.
+    required: false
+    default: 0.0.14
+  token:
+    description: GitHub token used to check out and push the repository.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  changed:
+    description: '"true" if a commit was pushed, "false" otherwise.'
+    value: ${{ steps.sync.outputs.changed }}
+  commit:
+    description: SHA of the pushed commit, if any.
+    value: ${{ steps.sync.outputs.commit }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ inputs.token }}
+        fetch-depth: 1
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install obsidian-headless
+      shell: bash
+      run: npm install --global --no-fund --no-audit "obsidian-headless@${OB_VERSION}"
+      env:
+        OB_VERSION: ${{ inputs.obsidian-headless-version }}
+
+    - name: Sync vault
+      id: sync
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/sync.sh"'
+      env:
+        OBSIDIAN_AUTH_TOKEN: ${{ inputs.auth-token }}
+        VAULT: ${{ inputs.vault }}
+        VAULT_PASSWORD: ${{ inputs.vault-password }}
+        DEVICE_NAME: ${{ inputs.device-name }}
+        MAX_SHRINK_PERCENT: ${{ inputs.max-shrink-percent }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        GIT_USER_NAME: ${{ inputs.git-user-name }}
+        GIT_USER_EMAIL: ${{ inputs.git-user-email }}
+        VERBOSE: ${{ inputs.verbose }}
+        REPO_DIR: ${{ github.workspace }}
